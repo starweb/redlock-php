@@ -22,20 +22,20 @@ class RedLock
     protected $quorum;
 
     /**
-     * @var array[]|\Redis[]
+     * @var array[]|\Redis[]|\RedisCluster[]
      */
     protected $servers = [];
 
     /**
-     * @var \Redis[]
+     * @var \Redis[]|\RedisCluster
      */
     protected $instances = [];
 
     /**
-     * @param array[]|\Redis[] $servers    Array of server tuples [host, port, timeout],
-     *                                     or pre-connected \Redis objects
-     * @param int              $retryDelay Delay in milliseconds between retries
-     * @param int              $retryCount Number of retries to attempt
+     * @param array[]|\Redis[]|\RedisCluster[] $servers    Array of server tuples [host, port, timeout],
+     *                                                     or pre-connected \Redis or |\RedisCluster objects
+     * @param int                              $retryDelay Delay in milliseconds between retries
+     * @param int                              $retryCount Number of retries to attempt
      */
     public function __construct(array $servers, $retryDelay = 200, $retryCount = 3)
     {
@@ -133,11 +133,13 @@ class RedLock
     {
         if (empty($this->instances)) {
             foreach ($this->servers as $server) {
-                if ($server instanceof \Redis) {
+                if ($server instanceof \Redis || $server instanceof \RedisCluster) {
                     if ($server->isConnected()) {
                         $redis = $server;
                     } else {
-                        throw new \Exception("If you use \\Redis objects as argument, the object must be connected.");
+                        throw new \Exception(
+                            "If you use \\Redis or \RedisCluster objects as argument, the object must be connected."
+                        );
                     }
                 } else {
                     if (empty($server[0])) {
@@ -160,24 +162,24 @@ class RedLock
     }
 
     /**
-     * @param \Redis $instance Server instance to be locked
-     * @param string $resource Resource name to be locked
-     * @param mixed  $token    Lock token
-     * @param int    $ttl      Time to live in milliseconds
+     * @param \Redis|\RedisCluster $instance Server instance to be locked
+     * @param string               $resource Resource name to be locked
+     * @param mixed                $token    Lock token
+     * @param int                  $ttl      Time to live in milliseconds
      * @return mixed
      */
-    protected function lockInstance(\Redis $instance, $resource, $token, $ttl)
+    protected function lockInstance($instance, $resource, $token, $ttl)
     {
         return $instance->set($resource, $token, ['NX', 'PX' => $ttl]);
     }
 
     /**
-     * @param \Redis $instance Server instance to be unlocked
-     * @param string $resource Resource name to be unlocked
-     * @param string $token    Lock token for verification
+     * @param \Redis|\RedisCluster $instance Server instance to be unlocked
+     * @param string               $resource Resource name to be unlocked
+     * @param string               $token    Lock token for verification
      * @return mixed
      */
-    protected function unlockInstance(\Redis $instance, $resource, $token)
+    protected function unlockInstance($instance, $resource, $token)
     {
         $script = '
             if redis.call("GET", KEYS[1]) == ARGV[1] then
